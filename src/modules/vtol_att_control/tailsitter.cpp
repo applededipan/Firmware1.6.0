@@ -82,6 +82,7 @@ Tailsitter::Tailsitter(VtolAttitudeControl *attc) :
 	_params_handles_tailsitter.vtol_fw_yaw_scale = param_find("VT_FW_YAW_SCALE");
 	_params_handles_tailsitter.vtol_thr_ftrans_max = param_find("VT_THR_TRANS_MAX");	
 	_params_handles_tailsitter.mpc_thr_min = param_find("MPC_THR_MIN");
+	_params_handles_tailsitter.back_trans_vel_threshold = param_find("VT_BACK_VEL");
 }
 
 Tailsitter::~Tailsitter()
@@ -132,6 +133,10 @@ Tailsitter::parameters_update()
 	/* vtol front transition thr max */
 	param_get(_params_handles_tailsitter.vtol_thr_ftrans_max, &v);
 	_params_tailsitter.vtol_thr_ftrans_max = math::constrain(v, 0.0f, 1.0f);
+
+	/* vtol back transition speed */
+	param_get(_params_handles_tailsitter.back_trans_vel_threshold, &v);
+	_params_tailsitter.back_trans_vel_threshold = math::constrain(v, 0.0f, 20.0f);
 	
 	/* minium thrust in auto thrust control */
 	param_get(_params_handles_tailsitter.mpc_thr_min, &v);
@@ -186,7 +191,7 @@ void Tailsitter::update_vtol_state()
 			break;
 
 		case FW_MODE:
-			_vtol_schedule.flight_mode 	= TRANSITION_BACK;
+			_vtol_schedule.flight_mode 	= TRANSITION_BACK_P1;
 			_vtol_schedule.transition_start = hrt_absolute_time();
 			break;
 
@@ -201,19 +206,39 @@ void Tailsitter::update_vtol_state()
 			//_vtol_schedule.flight_mode = MC_MODE;
 			break;
 
-		case TRANSITION_BACK:
+		case TRANSITION_BACK_P1:
 
 				// check if we have reached pitch angle to switch to MC mode
 /* 				if (pitch >= PITCH_TRANSITION_BACK) {
 					_vtol_schedule.flight_mode = MC_MODE;					
 				} */
 				
-				// check if back_trans_dur seconeds has passed then switch to MC mode
+				// check if back_trans_dur seconds has passed then switch to MC mode
 		        if ((float)hrt_elapsed_time(&_vtol_schedule.transition_start) >= (_params_tailsitter.back_trans_dur * 1000000.0f)) {
-					_vtol_schedule.flight_mode = MC_MODE;
+					_vtol_schedule.flight_mode = TRANSITION_BACK_P2;
 				}
 
 				break;
+
+        case TRANSITION_BACK_P2:
+                float v0 = ; // velocity along the body center axis
+                // check if v0 is slowed down sufficiently or twice back_trans_dur seconds has passed
+                if ((float)hrt_elapsed_time(&_vtol_schedule.transition_start) >= (_params_tailsitter.back_trans_dur * 2000000.0f)
+                   || v0 < _params_tailsitter.back_trans_vel_threshold) {
+                    _vtol_schedule.flight_mode = TRANSITION_BACK_P3;
+                    _vtol_schedule.transition_start = hrt_absolute_time();
+                }
+
+                break;
+
+        case TRANSITION_BACK_P3:
+                // check if 1 second has passed since transition to TRANSITION_BACK_P3
+                if ((float)hrt_elapsed_time(&_vtol_schedule.transition_start) >= 1000000.0f) {
+                    _vtol_schedule.flight_mode = MC_MODE;
+                }
+
+                break;
+
 			}
         }
 	} else if (_attc->is_fixed_wing_requested() == 1) {  // user switchig to FW mode
@@ -248,7 +273,9 @@ void Tailsitter::update_vtol_state()
 
 		case TRANSITION_FRONT_P2:
 
-		case TRANSITION_BACK:
+		case TRANSITION_BACK_P1:
+        case TRANSITION_BACK_P2:
+        case TRANSITION_BACK_P3:
 			// failsafe into fixed wing mode
 			_vtol_schedule.flight_mode = FW_MODE;
 
@@ -291,7 +318,9 @@ void Tailsitter::update_vtol_state()
 		_vtol_vehicle_status->vtol_in_trans_mode = true;
 		break;
 
-	case TRANSITION_BACK:
+	case TRANSITION_BACK_P1:
+    case TRANSITION_BACK_P2:
+    case TRANSITION_BACK_P3:
 		_vtol_mode = TRANSITION_TO_MC;
 		_vtol_vehicle_status->vtol_in_trans_mode = true;
 		break;
@@ -395,7 +424,7 @@ void Tailsitter::update_transition_state()
 		_mc_yaw_weight = 0.0f;
 
 
-	} else if (_vtol_schedule.flight_mode == TRANSITION_BACK) {
+	} else if (_vtol_schedule.flight_mode == TRANSITION_BACK_P1) {
 
 		if (!flag_idle_mc) {
 			set_idle_mc();
@@ -419,21 +448,7 @@ void Tailsitter::update_transition_state()
 			
 		}		
 		
-		//  throttle value is decreesed
-		if (_params_tailsitter.vtol_btrans_thr <= 0.0f) { // apple 2016/11/26
-			_v_att_sp->thrust = _thrust_transition_start * 0.9f;
-			
-		} else {
-			if (_params_tailsitter.mpc_thr_min <= _params_tailsitter.vtol_btrans_thr) {
-				_v_att_sp->thrust = _params_tailsitter.vtol_btrans_thr;
-				
-			} else {
-				_v_att_sp->thrust = _params_tailsitter.vtol_btrans_thr + (_params_tailsitter.mpc_thr_min-_params_tailsitter.vtol_btrans_thr) * 
-				(float)hrt_elapsed_time(&_vtol_schedule.transition_start)/(_params_tailsitter.back_trans_dur * 1000000.0f);
-				_v_att_sp->thrust = math::constrain(_v_att_sp->thrust, _params_tailsitter.vtol_btrans_thr, _params_tailsitter.mpc_thr_min);
-				
-			}			
-		}
+        _v_att_sp->thrust = _params_tailsitter.vtol_btrans_thr;
 
 		/** keep yaw disabled */
 //		_mc_yaw_weight = 0.0f;
@@ -444,10 +459,21 @@ void Tailsitter::update_transition_state()
 		_mc_roll_weight = tmp;
 		_mc_pitch_weight = tmp;
 	    _mc_yaw_weight = tmp;
-	}
+		
+	} else if (_vtol_schedule.flight_mode == TRANSITION_BACK_P2) {
+        _v_att_sp->thrust = _params_tailsitter.vtol_btrans_thr;
+		
+    } else if (_vtol_schedule.flight_mode == TRANSITION_BACK_P3) {
+        if (_params_tailsitter.mpc_thr_min <= _params_tailsitter.vtol_btrans_thr) {
+            _v_att_sp->thrust = _params_tailsitter.mpc_thr_min;
 
+        } else {
+            _v_att_sp->thrust = _params_tailsitter.vtol_btrans_thr + (_params_tailsitter.mpc_thr_min-_params_tailsitter.vtol_btrans_thr) *
+            (float)hrt_elapsed_time(&_vtol_schedule.transition_start)/1000000.0f;
+            _v_att_sp->thrust = math::constrain(_v_att_sp->thrust, _params_tailsitter.vtol_btrans_thr, _params_tailsitter.mpc_thr_min);
 
-
+        }
+    }
 
 	_mc_roll_weight = math::constrain(_mc_roll_weight, 0.0f, 1.0f);
 	_mc_yaw_weight = math::constrain(_mc_yaw_weight, 0.0f, 1.0f);
