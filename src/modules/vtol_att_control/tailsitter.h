@@ -76,8 +76,6 @@ private:
 		float vtol_thr_ftrans_max;
 		float back_trans_vel_threshold;
 		float mpc_thr_min;
-	    int vtol_ftrans_force_en;       /**< enable skip judgement when transition to FW mode */
-		int vtol_btrans_force_en;       /**< enable skip judgement when transition to MC mode */
 		float vtol_fw_yaw_scale;     /**< VTOL yaw scale > */
 	} _params_tailsitter;
 
@@ -94,8 +92,6 @@ private:
 		param_t vtol_thr_ftrans_max;
 		param_t back_trans_vel_threshold;
 		param_t mpc_thr_min;
-		param_t vtol_ftrans_force_en; // apple
-		param_t vtol_btrans_force_en; // apple
 		param_t vtol_fw_yaw_scale;
 	} _params_handles_tailsitter;
 
