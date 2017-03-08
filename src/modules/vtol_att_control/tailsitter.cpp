@@ -193,6 +193,9 @@ void Tailsitter::update_vtol_state()
 
 		case TRANSITION_BACK_P1:				
 				// check if back_trans_dur seconds has passed then switch to MC mode
+/* 				if (pitch >= PITCH_TRANSITION_BACK) {
+					_vtol_schedule.flight_mode = MC_MODE;					
+				} */
 		        if ((float)hrt_elapsed_time(&_vtol_schedule.transition_start) >= (_params_tailsitter.back_trans_dur * 1000000.0f)) {
 					_vtol_schedule.flight_mode = TRANSITION_BACK_P2;
 				}
@@ -232,6 +235,10 @@ void Tailsitter::update_vtol_state()
 
 		case TRANSITION_FRONT_P1:
 				// check if front_trans_dur seconeds has passed then switch to FW mode
+/* 				if ((airspeed->indicated_airspeed_m_s >= _params_tailsitter.airspeed_trans
+						 && pitch <= PITCH_TRANSITION_FRONT_P1) || can_transition_on_ground())
+						_vtol_schedule.flight_mode = FW_MODE;				
+				} */
 		        if ((float)hrt_elapsed_time(&_vtol_schedule.transition_start) >= (_params_tailsitter.front_trans_dur * 1000000.0f) || can_transition_on_ground()) {
 					_vtol_schedule.flight_mode = FW_MODE;						
 				}
@@ -340,7 +347,12 @@ void Tailsitter::update_transition_state()
 							 (1.0f + _params_tailsitter.vtol_thr_ftrans_max) * _thrust_transition_start);
 		_v_att_sp->thrust = _thrust_transition;
 				
-		_mc_yaw_weight = 1.0f;
+		// if (_ctrl_state->airspeed > ARSP_YAW_CTRL_DISABLE) {
+			// _mc_yaw_weight = 0.0f;
+
+		// } else {
+			   _mc_yaw_weight = 1.0f;
+		// }
 		_mc_roll_weight = 1.0f;				  
 		_mc_pitch_weight = 1.0f;
 
@@ -421,15 +433,10 @@ void Tailsitter::update_transition_state()
         _v_att_sp->thrust = _params_tailsitter.vtol_btrans_thr;
 		
     } else if (_vtol_schedule.flight_mode == TRANSITION_BACK_P3) {
-        if (_params_tailsitter.mpc_thr_min <= _params_tailsitter.vtol_btrans_thr) {
-            _v_att_sp->thrust = _params_tailsitter.mpc_thr_min;
+        _v_att_sp->thrust = _params_tailsitter.vtol_btrans_thr + (_params_tailsitter.mpc_thr_min-_params_tailsitter.vtol_btrans_thr) *
+        (float)hrt_elapsed_time(&_vtol_schedule.transition_start)/1000000.0f;
+        _v_att_sp->thrust = math::constrain(_v_att_sp->thrust, _params_tailsitter.vtol_btrans_thr, _params_tailsitter.mpc_thr_min);
 
-        } else {
-            _v_att_sp->thrust = _params_tailsitter.vtol_btrans_thr + (_params_tailsitter.mpc_thr_min-_params_tailsitter.vtol_btrans_thr) *
-            (float)hrt_elapsed_time(&_vtol_schedule.transition_start)/1000000.0f;
-            _v_att_sp->thrust = math::constrain(_v_att_sp->thrust, _params_tailsitter.vtol_btrans_thr, _params_tailsitter.mpc_thr_min);
-
-        }
     }
 
 	_mc_roll_weight = math::constrain(_mc_roll_weight, 0.0f, 1.0f);
