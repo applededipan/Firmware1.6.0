@@ -118,7 +118,7 @@ private:
 	struct manual_control_setpoint_s	_manual;
 	struct control_state_s			_ctrl_state;
 	struct vehicle_control_mode_s		_control_mode;
-
+	orb_advert_t _mavlink_log_pub;	// mavlink log uORB handle // apple 20170315
 	uint64_t _min_trust_start;		///< timestamp when minimum trust was applied first
 	uint64_t _arming_time;
 
