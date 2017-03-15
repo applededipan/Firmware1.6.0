@@ -169,7 +169,7 @@ private:
 	param_t _p_total_flight_time;
 	int32_t _total_flight_time;
 	hrt_abstime _takeoff_time;
-
+	orb_advert_t _mavlink_log_pub;	// apple 20170315
 	struct work_s	_work;
 };
 
