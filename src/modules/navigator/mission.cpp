@@ -1056,6 +1056,12 @@ Mission::heading_sp_update()
 			} else {
 				_mission_item.yaw = yaw;
 				pos_sp_triplet->current.yaw = _mission_item.yaw;
+
+				static float yaw_last = 0.0f;
+				if (fabsf(pos_sp_triplet->current.yaw-yaw_last) > 0.05f) {
+					mavlink_log_info(_navigator->get_mavlink_log_pub(), "apple:yaw_sp = %5.2f \n", (double)pos_sp_triplet->current.yaw);
+					yaw_last = pos_sp_triplet->current.yaw;
+				}
 			}
 		}
 	}
