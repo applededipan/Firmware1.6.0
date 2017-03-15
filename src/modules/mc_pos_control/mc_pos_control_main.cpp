@@ -1153,8 +1153,8 @@ MulticopterPositionControl::control_non_manual(float dt)
 
 		if (!_takeoff_jumped) {
 			// ramp thrust setpoint up
-			if (_vel(2) > -(_params.tko_speed / 2.0f)) {
-				_takeoff_thrust_sp += 0.5f * dt;
+			if (_vel(2) > -(_params.tko_speed / 1.5f)) { // 2.0f apple 20170315
+				_takeoff_thrust_sp += 0.3f * dt;         // 0.5f apple 20170315
 				_vel_sp.zero();
 				_vel_prev.zero();
 
