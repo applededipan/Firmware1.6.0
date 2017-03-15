@@ -50,7 +50,6 @@ namespace land_detector
 {
 
 MulticopterLandDetector::MulticopterLandDetector() : LandDetector(),
-	_mavlink_log_pub(nullptr), // apple 20170315
 	_paramHandle(),
 	_params(),
 	_vehicleLocalPositionSub(-1),
@@ -248,7 +247,20 @@ bool MulticopterLandDetector::_get_landed_state()
 	bool rotating = (fabsf(_vehicleAttitude.rollspeed)  > maxRotationScaled) ||
 			(fabsf(_vehicleAttitude.pitchspeed) > maxRotationScaled) ||
 			(fabsf(_vehicleAttitude.yawspeed) > maxRotationScaled);
-	mavlink_log_info(&_mavlink_log_pub, "apple = %d %d %d %d \n", (int)_ground_contact_hysteresis.get_state(), (int)_get_minimal_thrust(), (int)(!rotating), (int)(!horizontalMovement)); //apple
+
+	static int a, b, c, d;
+	if (a != ((int)_ground_contact_hysteresis.get_state()) ||
+		b != ((int)_get_minimal_thrust()) ||
+		c != ((int)(!rotating)) ||
+		d != ((int)(!horizontalMovement))) {
+		mavlink_log_info(&_mavlink_log_pub, "apple = %d %d %d %d \n", (int)_ground_contact_hysteresis.get_state(), (int)_get_minimal_thrust(), (int)(!rotating), (int)(!horizontalMovement)); //apple
+
+		a = (int)_ground_contact_hysteresis.get_state();
+		b = (int)_get_minimal_thrust();
+		c = (int)(!rotating);
+		d = (int)(!horizontalMovement);
+	}
+
 	if (_ground_contact_hysteresis.get_state() && _get_minimal_thrust() && !rotating && !horizontalMovement) {
 		// Ground contact, no thrust and no movement -> landed
 		return true;
