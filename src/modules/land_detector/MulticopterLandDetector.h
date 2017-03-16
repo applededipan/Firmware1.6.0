@@ -102,7 +102,7 @@ private:
 		float freefall_acc_threshold;
 		float freefall_trigger_time;
 	} _params;
-
+	orb_advert_t _mavlink_log_pub;	// mavlink log uORB handle // apple 20170316
 	int _vehicleLocalPositionSub;
 	int _actuatorsSub;
 	int _armingSub;
