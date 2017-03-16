@@ -52,6 +52,7 @@ namespace land_detector
 MulticopterLandDetector::MulticopterLandDetector() : LandDetector(),
 	_paramHandle(),
 	_params(),
+	_mavlink_log_pub(nullptr), // apple 20170315
 	_vehicleLocalPositionSub(-1),
 	_actuatorsSub(-1),
 	_armingSub(-1),
