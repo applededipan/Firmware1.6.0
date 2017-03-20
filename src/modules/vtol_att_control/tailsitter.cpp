@@ -82,6 +82,7 @@ Tailsitter::Tailsitter(VtolAttitudeControl *attc) :
 	_params_handles_tailsitter.vtol_fw_yaw_scale = param_find("VT_FW_YAW_SCALE");
 	_params_handles_tailsitter.vtol_thr_ftrans_max = param_find("VT_THR_TRANS_MAX");	
 	_params_handles_tailsitter.mpc_thr_min = param_find("MPC_THR_MIN");
+	_params_handles_tailsitter.mpc_thr_hover = param_find("MPC_THR_HOVER");
 	_params_handles_tailsitter.back_trans_vel_threshold = param_find("VT_BACK_VEL");
 }
 
@@ -142,6 +143,10 @@ Tailsitter::parameters_update()
 	param_get(_params_handles_tailsitter.mpc_thr_min, &v);
 	_params_tailsitter.mpc_thr_min = math::constrain(v, 0.0f, 1.0f);
 
+	/* hover thrust in auto thrust control */
+	param_get(_params_handles_tailsitter.mpc_thr_hover, &v);
+	_params_tailsitter.mpc_thr_hover = math::constrain(v, 0.0f, 1.0f);
+
 	/* vtol fw motor differential steering scale*/
 	param_get(_params_handles_tailsitter.vtol_fw_yaw_scale, &v);
 	v = math::constrain(v, 0.0f, 1.0f);
@@ -194,34 +199,48 @@ void Tailsitter::update_vtol_state()
 			break;
 
 		case TRANSITION_BACK_P1:				
-				// check if back_trans_dur seconds has passed then switch to MC mode
+			// check if back_trans_dur seconds has passed then switch to MC mode
 /* 				if (pitch >= PITCH_TRANSITION_BACK) {
-					_vtol_schedule.flight_mode = MC_MODE;					
-				} */
-		        if ((float)hrt_elapsed_time(&_vtol_schedule.transition_start) >= (_params_tailsitter.back_trans_dur * 1000000.0f)) {
-					_vtol_schedule.flight_mode = TRANSITION_BACK_P2;
-				}
+				_vtol_schedule.flight_mode = MC_MODE;
+			} */
 
-				break;
+/*			if ((float)hrt_elapsed_time(&_vtol_schedule.transition_start) >= (_params_tailsitter.back_trans_dur * 1000000.0f)) {
+				_vtol_schedule.flight_mode = TRANSITION_BACK_P2;
+			}*/
+
+			if (_v_att_sp->thrust >= _params_tailsitter.mpc_thr_hover) {
+				_vtol_schedule.flight_mode = TRANSITION_BACK_P2;
+				_vtol_schedule.transition_start = hrt_absolute_time();
+			}
+			break;
 
         case TRANSITION_BACK_P2:
-                // check if climbing is slowed down sufficiently or twice back_trans_dur seconds has passed
-				mavlink_log_info(&_mavlink_log_pub, "glo_v = %3.2f loc_v = %3.3f \n", (double)_global_pos->vel_d, (double)_local_pos->vz); //apple
-                if ((float)hrt_elapsed_time(&_vtol_schedule.transition_start) >= (_params_tailsitter.back_trans_dur * 2000000.0f)
-                   || _global_pos->vel_d > -_params_tailsitter.back_trans_vel_threshold || _local_pos->vz > -_params_tailsitter.back_trans_vel_threshold) {
-                    _vtol_schedule.flight_mode = TRANSITION_BACK_P3;
-                    _vtol_schedule.transition_start = hrt_absolute_time();
-                }
+			// check if climbing is slowed down sufficiently or twice back_trans_dur seconds has passed
+			mavlink_log_info(&_mavlink_log_pub, "glo_v = %3.2f loc_v = %3.3f \n", (double)_global_pos->vel_d, (double)_local_pos->vz); //apple
 
-                break;
+/*			if ((float)hrt_elapsed_time(&_vtol_schedule.transition_start) >= (_params_tailsitter.back_trans_dur * 2000000.0f)
+			   || _global_pos->vel_d > -_params_tailsitter.back_trans_vel_threshold || _local_pos->vz > -_params_tailsitter.back_trans_vel_threshold) {
+				_vtol_schedule.flight_mode = TRANSITION_BACK_P3;
+				_vtol_schedule.transition_start = hrt_absolute_time();
+			}*/
+
+			if (_local_pos->vz > -_params_tailsitter.back_trans_vel_threshold) {
+				_vtol_schedule.flight_mode = TRANSITION_BACK_P3;
+				_vtol_schedule.transition_start = hrt_absolute_time();
+
+			}
+			break;
 
         case TRANSITION_BACK_P3:
-                // check if 1 second has passed since transition to TRANSITION_BACK_P3
-                if ((float)hrt_elapsed_time(&_vtol_schedule.transition_start) >= 1000000.0f) {
-                    _vtol_schedule.flight_mode = MC_MODE;
-                }
+			// check if 1 second has passed since transition to TRANSITION_BACK_P3
+/*			if ((float)hrt_elapsed_time(&_vtol_schedule.transition_start) >= 1000000.0f) {
+				_vtol_schedule.flight_mode = MC_MODE;
+			}*/
 
-                break;
+			if (_v_att_sp_thrust >= _params_tailsitter.mpc_thr_hover) {
+				_vtol_schedule.flight_mode = MC_MODE;
+			}
+			break;
 		}
 			
 	} else if (_attc->is_fixed_wing_requested() == 1) {  // user switchig to FW mode
@@ -237,14 +256,16 @@ void Tailsitter::update_vtol_state()
 			break;
 
 		case TRANSITION_FRONT_P1:
-				// check if front_trans_dur seconeds has passed then switch to FW mode
+			// check if front_trans_dur seconeds has passed then switch to FW mode
 /* 				if ((airspeed->indicated_airspeed_m_s >= _params_tailsitter.airspeed_trans
-						 && pitch <= PITCH_TRANSITION_FRONT_P1) || can_transition_on_ground())
-						_vtol_schedule.flight_mode = FW_MODE;				
-				} */
-		        if ((float)hrt_elapsed_time(&_vtol_schedule.transition_start) >= (_params_tailsitter.front_trans_dur * 1000000.0f) || can_transition_on_ground()) {
-					_vtol_schedule.flight_mode = FW_MODE;						
-				}
+					 && pitch <= PITCH_TRANSITION_FRONT_P1) || can_transition_on_ground())
+					_vtol_schedule.flight_mode = FW_MODE;
+			} */
+
+			if ((float)hrt_elapsed_time(&_vtol_schedule.transition_start) >= (_params_tailsitter.front_trans_dur * 1000000.0f) || can_transition_on_ground()) {
+				_vtol_schedule.flight_mode = FW_MODE;
+			}
+
 
 			break;
 
@@ -423,7 +444,12 @@ void Tailsitter::update_transition_state()
 			
 		}		
 		
-        _v_att_sp->thrust = _params_tailsitter.vtol_btrans_thr;
+        //_v_att_sp->thrust = _params_tailsitter.vtol_btrans_thr;
+
+		if (_v_att_sp->thrust < _params_tailsitter.mpc_thr_hover) {
+			_v_att_sp->thrust += 0.5f * (float)hrt_elapsed_time(&_vtol_schedule.transition_start) / (_params_tailsitter.back_trans_dur * 1000000.0f);
+
+		}
 
 		/** keep yaw disabled */
 //		_mc_yaw_weight = 0.0f;
@@ -436,13 +462,22 @@ void Tailsitter::update_transition_state()
 	    _mc_yaw_weight = tmp;
 		
 	} else if (_vtol_schedule.flight_mode == TRANSITION_BACK_P2) {
-        _v_att_sp->thrust = _params_tailsitter.vtol_btrans_thr;
+//        _v_att_sp->thrust = _params_tailsitter.vtol_btrans_thr;
+
+		if (_local_pos->vz <= -_params_tailsitter.back_trans_vel_threshold) {
+			if (_v_att_sp_thrust > _params_tailsitter.vtol_btrans_thr) {
+				_v_att_sp_thrust -= 0.5f * (float)hrt_elapsed_time(&_vtol_schedule.transition_start)/1000000.0f;
+			}
+		}
 		
     } else if (_vtol_schedule.flight_mode == TRANSITION_BACK_P3) {
-        _v_att_sp->thrust = _params_tailsitter.vtol_btrans_thr + (_params_tailsitter.mpc_thr_min-_params_tailsitter.vtol_btrans_thr) *
+/*        _v_att_sp->thrust = _params_tailsitter.vtol_btrans_thr + (_params_tailsitter.mpc_thr_min-_params_tailsitter.vtol_btrans_thr) *
         (float)hrt_elapsed_time(&_vtol_schedule.transition_start)/1000000.0f;
-        _v_att_sp->thrust = math::constrain(_v_att_sp->thrust, _params_tailsitter.vtol_btrans_thr, _params_tailsitter.mpc_thr_min);
+        _v_att_sp->thrust = math::constrain(_v_att_sp->thrust, _params_tailsitter.vtol_btrans_thr, _params_tailsitter.mpc_thr_min);*/
 
+    	if (_v_att_sp_thrust < _params_tailsitter.mpc_thr_hover) {
+    		_v_att_sp_thrust += 0.5f * (float)hrt_elapsed_time(&_vtol_schedule.transition_start)/1000000.0f;
+    	}
     }
 
 
