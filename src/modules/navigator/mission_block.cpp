@@ -350,7 +350,7 @@ MissionBlock::is_mission_item_reached()
 
 				if (_param_back_trans_dur.get() > FLT_EPSILON && groundspeed > FLT_EPSILON
 				    && groundspeed * _param_back_trans_dur.get() > mission_acceptance_radius) {
-					mission_acceptance_radius = groundspeed * _param_back_trans_dur.get();
+					mission_acceptance_radius = groundspeed * _param_back_trans_dur.get(); // apple
 				}
 
 			}
